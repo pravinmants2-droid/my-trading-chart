@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+
+    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Interactive Chart</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #131722;
+            color: white;
+            font-family: Arial, sans-serif;
+            user-select: none;
+        }
+        .chart-title {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        #chart-container {
+            width: 100%;
+            max-width: 1200px;
+            height: 500px;
+            margin: 0 auto;
+            border: 1px solid #2a2e39;
+            border-radius: 8px;
+            background-color: #131722;
+            position: relative;
+        }
+        /* टूलटिप स्टाइल */
+        #tooltip {
+            position: absolute;
+            display: none;
+            background: rgba(30, 34, 45, 0.9);
+            border: 1px solid #363a45;
+            color: #d1d4dc;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <h2 class="chart-title">इंटरएक्टिव ऑफ़लाइन चार्ट (Crosshair, Tooltip और Zooming)</h2>
+
+    <div id="chart-container">
+        <!-- प्राइस बॉक्स यहाँ पॉपअप होगा -->
+        <div id="tooltip"></div>
+    </div>
+
+    <script>
+        window.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('chart-container');
+            const tooltip = document.getElementById('tooltip');
+            
+            const mockData = [
+                { time: "09:30", open: 23200, high: 23250, low: 23180, close: 23240, vol: 150 },
+                { time: "09:45", open: 23240, high: 23310, low: 23230, close: 23290, vol: 240 },
+                { time: "10:00", open: 23290, high: 23300, low: 23210, close: 23220, vol: 190 },
+                { time: "10:15", open: 23220, high: 23340, low: 23200, close: 23310, vol: 310 },
+                { time: "10:30", open: 23310, high: 23400, low: 23300, close: 23380, vol: 420 },
+                { time: "10:45", open: 23380, high: 23390, low: 23310, close: 23330, vol: 110 },
+                { time: "11:00", open: 23330, high: 23450, low: 23320, close: 23430, vol: 280 },
+                { time: "11:15", open: 23430, high: 23500, low: 23410, close: 23480, vol: 390 }
+            ];
+
+            const canvas = document.createElement('canvas');
+            canvas.width = container.clientWidth;
+            canvas.height = 500;
+            container.appendChild(canvas);
+            const ctx = canvas.getContext('2d');
+
+            // इंटरैक्शन के लिए वेरिएबल्स
+            let mouseX = -1;
+            let mouseY = -1;
+            let candleWidth = 40;
+            let spacing = 40;
+            const startX = 60;
+
+            function drawChart() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#131722';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // ग्रिड लाइन्स
+                ctx.strokeStyle = '#2a2e39';
+                ctx.lineWidth = 1;
+                for(let i = 50; i < canvas.width - 80; i += 80) {
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 450); ctx.stroke();
+                }
+                for(let i = 50; i < 450; i += 50) {
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width - 80, i); ctx.stroke();
+                }
+
+                let hoveredCandle = null;
+
+                mockData.forEach((d, index) => {
+                    const x = startX + index * (candleWidth + spacing);
+                    const isGreen = d.close >= d.open;
+                    
+                    const yOpen = 400 - (d.open - 23100) * 2;
+                    const yClose = 400 - (d.close - 23100) * 2;
+                    const yHigh = 400 - (d.high - 23100) * 2;
+                    const yLow = 400 - (d.low - 23100) * 2;
+
+                    // चेक करें कि माउस इस कैंडल पर है या नहीं
+                    if (mouseX >= x && mouseX <= x + candleWidth) {
+                        hoveredCandle = d;
+                        // कर्सर वाली कैंडल को हाईलाइट करने के लिए हल्का बैकग्राउंड
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+                        ctx.fillRect(x - spacing/2, 0, candleWidth + spacing, 450);
+                    }
+
+                    // कैंडल ड्रॉ करना
+                    ctx.strokeStyle = isGreen ? '#26a69a' : '#ef5350';
+                    ctx.fillStyle = isGreen ? '#26a69a' : '#ef5350';
+
+                    ctx.beginPath();
+                    ctx.moveTo(x + candleWidth / 2, yHigh);
+                    ctx.lineTo(x + candleWidth / 2, yLow);
+                    ctx.stroke();
+
+                    ctx.fillRect(x, Math.min(yOpen, yClose), candleWidth, Math.max(2, Math.abs(yOpen - yClose)));
+
+                    // वॉल्यूम
+                    ctx.fillStyle = isGreen ? 'rgba(38, 166, 154, 0.2)' : 'rgba(239, 83, 80, 0.2)';
+                    ctx.fillRect(x, 450 - d.vol * 0.2, candleWidth, d.vol * 0.2);
+
+                    // टाइम स्केल
+                    ctx.fillStyle = '#787b86';
+                    ctx.font = '12px Arial';
+                    ctx.fillText(d.time, x + 5, 475);
+                });
+
+                // प्राइस स्केल (राइट पैनल)
+                ctx.fillStyle = '#1c2030';
+                ctx.fillRect(canvas.width - 80, 0, 80, 450);
+                ctx.strokeStyle = '#2a2e39';
+                ctx.beginPath(); ctx.moveTo(canvas.width - 80, 0); ctx.lineTo(canvas.width - 80, 450); ctx.stroke();
+
+                ctx.fillStyle = '#d1d4dc';
+                ctx.fillText("23500", canvas.width - 70, 100);
+                ctx.fillText("23300", canvas.width - 70, 230);
+                ctx.fillText("23100", canvas.width - 70, 370);
+
+                // फीचर 1: Crosshair (प्लस लाइन्स) ड्रॉ करना
+                if (mouseX > 0 && mouseX < canvas.width - 80 && mouseY > 0 && mouseY < 450) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.setLineDash([4, 4]); // डॉटेड लाइन
+
+                    // वर्टिकल लाइन
+                    ctx.beginPath(); ctx.moveTo(mouseX, 0); ctx.lineTo(mouseX, 450); ctx.stroke();
+                    // हॉरिजॉन्टल लाइन
+                    ctx.beginPath(); ctx.moveTo(0, mouseY); ctx.lineTo(canvas.width - 80, mouseY); ctx.stroke();
+                    
+                    ctx.setLineDash([]); // लाइन वापस नॉर्मल करें
+                }
+
+                // फीचर 2: Tooltip में डेटा दिखाना
+                if (hoveredCandle) {
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (mouseX + 20) + 'px';
+                    tooltip.style.top = (mouseY + 20) + 'px';
+                    tooltip.innerHTML = `
+                        <b style="color:#fff">समय: ${hoveredCandle.time}</b><br>
+                        <span style="color:#26a69a">Open: ${hoveredCandle.open}</span><br>
+                        <span style="color:#ff9800">High: ${hoveredCandle.high}</span><br>
+                        <span style="color:#ef5350">Low: ${hoveredCandle.low}</span><br>
+                        <span style="color:#fff">Close: ${hoveredCandle.close}</span><br>
+                        <span style="color:#787b86">Vol: ${hoveredCandle.vol}</span>
+                    `;
+                } else {
+                    tooltip.style.display = 'none';
+                }
+            }
+
+            // माउस मूवमेंट को ट्रैक करना
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                mouseX = e.clientX - rect.left;
+                mouseY = e.clientY - rect.top;
+                drawChart();
+            });
+
+            // माउस बाहर जाने पर टूल्स हटाना
+            canvas.addEventListener('mouseleave', () => {
+                mouseX = -1;
+                mouseY = -1;
+                tooltip.style.display = 'none';
+                drawChart();
+            });
+
+            // फीचर 3: ज़ूम इन / ज़ूम आउट (Mouse Wheel Zoom)
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (e.deltaY < 0) {
+                    // स्क्रॉल अप -> ज़ूम इन (कैंडल बड़ी होगी)
+                    if (candleWidth < 80) { candleWidth += 4; spacing += 2; }
+                } else {
+                    // स्क्रॉल डाउन -> ज़ूम आउट (कैंडल छोटी होगी)
+                    if (candleWidth > 15) { candleWidth -= 4; spacing -= 2; }
+                }
+                drawChart();
+            });
+
+            drawChart();
+            
+            window.addEventListener('resize', () => {
+                canvas.width = container.clientWidth;
+                drawChart();
+            });
+        });
+    </script>
+</body>
+</html>
